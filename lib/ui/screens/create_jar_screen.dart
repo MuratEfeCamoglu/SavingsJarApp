@@ -107,10 +107,13 @@ class _CreateJarScreenState extends State<CreateJarScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text('New Savings Jar',
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.bold,
+                fontSize: 28)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

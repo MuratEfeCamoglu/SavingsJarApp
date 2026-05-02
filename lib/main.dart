@@ -16,11 +16,13 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    // Enable offline persistence for faster reads when reconnecting
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
   } catch (e) {
-    debugPrint("Firebase init error: $e");
+    debugPrint('Firebase init error: $e');
   }
 
   runApp(
@@ -39,30 +41,63 @@ class SavingsJarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    return MaterialApp(
-      title: 'Savings Jar',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeProvider.themeMode,
-      debugShowCheckedModeBanner: false,
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          }
-          if (snapshot.hasData) {
-            // Tell JarProvider to fetch data once logged in
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Provider.of<JarProvider>(context, listen: false).fetchJars();
-              Provider.of<JarProvider>(context, listen: false).fetchTransactions();
-            });
-            return const MainWrapper();
-          }
-          return const LoginScreen();
-        },
+    // Use Selector so only theme changes trigger a rebuild here
+    return Selector<ThemeProvider, ThemeMode>(
+      selector: (_, p) => p.themeMode,
+      builder: (context, themeMode, _) => MaterialApp(
+        title: 'Savings Jar',
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeMode,
+        debugShowCheckedModeBanner: false,
+        home: const _AuthGate(),
       ),
+    );
+  }
+}
+
+/// Separate StatefulWidget so auth state changes don't rebuild MaterialApp.
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({Key? key}) : super(key: key);
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  String? _lastUid; // Track UID to avoid re-subscribing on same user
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
+        }
+
+        final user = snapshot.data;
+
+        if (user != null) {
+          // Only fetch when UID actually changes (login, not every rebuild)
+          if (user.uid != _lastUid) {
+            _lastUid = user.uid;
+            // Schedule after frame to avoid calling setState during build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final provider =
+                  Provider.of<JarProvider>(context, listen: false);
+              provider.fetchJars();
+              provider.fetchTransactions();
+            });
+          }
+          return const MainWrapper();
+        }
+
+        // User logged out — reset tracking
+        _lastUid = null;
+        return const LoginScreen();
+      },
     );
   }
 }

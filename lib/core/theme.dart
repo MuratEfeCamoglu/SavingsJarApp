@@ -40,15 +40,15 @@ class AppTheme {
             bodyMedium: GoogleFonts.inter(color: const Color(0xFF94A3B8)), // Slate 400
           ),
       appBarTheme: AppBarTheme(
-        backgroundColor: background,
+        backgroundColor: const Color(0xFF0F172A), // Slate 900 — matches dark scaffold
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: GoogleFonts.inter(
-          color: textPrimary,
+          color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
-        iconTheme: const IconThemeData(color: textPrimary),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: cardColor,
@@ -104,9 +104,9 @@ class AppTheme {
             bodyMedium: GoogleFonts.inter(color: textSecondary),
           ),
       appBarTheme: AppBarTheme(
-        backgroundColor: background,
+        backgroundColor: background, // Slate 50 — matches light scaffold
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: GoogleFonts.inter(
           color: textPrimary,
           fontSize: 20,

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/models/jar_model.dart';
 import '../../providers/jar_provider.dart';
 import '../../core/theme.dart';
@@ -12,43 +13,71 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<JarProvider>(context);
-    final jars = provider.jars;
+    final user = FirebaseAuth.instance.currentUser;
+    final photoURL = user?.photoURL;
 
     return Scaffold(
       appBar: AppBar(
-        leading: const Padding(
-          padding: EdgeInsets.all(8.0),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
           child: CircleAvatar(
-            backgroundImage: NetworkImage('https://i.pravatar.cc/150'),
+            backgroundImage: photoURL != null
+                ? NetworkImage(photoURL) as ImageProvider
+                : null,
+            backgroundColor: AppTheme.primary.withOpacity(0.2),
+            child: photoURL == null
+                ? Text(
+                    (user?.displayName?.isNotEmpty == true)
+                        ? user!.displayName![0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary))
+                : null,
           ),
         ),
-        title: const Text('Savings Jars'),
+        title: Text('Savings Jars',
+            style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.bold,
+                fontSize: 28)),
+        centerTitle: false,
         actions: [
-          IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
+          IconButton(
+              icon: const Icon(Icons.notifications_none), onPressed: () {}),
         ],
       ),
-      body: jars.isEmpty
-          ? Center(
+      body: Selector<JarProvider, List<JarModel>>(
+        selector: (_, p) => p.jars,
+        builder: (context, jars, _) {
+          if (jars.isEmpty) {
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.savings_outlined, size: 80, color: AppTheme.primary.withOpacity(0.3)),
+                  Icon(Icons.savings_outlined,
+                      size: 80, color: AppTheme.primary.withOpacity(0.3)),
                   const SizedBox(height: 16),
-                  Text('No jars yet!', style: Theme.of(context).textTheme.titleLarge),
+                  Text('No jars yet!',
+                      style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
-                  Text('Tap + to create your first savings jar.', style: Theme.of(context).textTheme.bodyMedium),
+                  Text('Tap + to create your first savings jar.',
+                      style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: jars.length,
-              itemBuilder: (context, index) {
-                final jar = jars[index];
-                return _JarCard(jar: jar);
-              },
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: jars.length,
+            // RepaintBoundary isolates each card from sibling repaints
+            itemBuilder: (context, index) => RepaintBoundary(
+              child: _JarCard(jar: jars[index]),
             ),
+          );
+        },
+      ),
     );
   }
 }

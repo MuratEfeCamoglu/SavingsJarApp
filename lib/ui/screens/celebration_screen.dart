@@ -186,21 +186,46 @@ class _CelebrationScreenState extends State<CelebrationScreen> {
   }
 
   Path drawStar(Size size) {
-    double degToRad(double deg) => deg * (3.141592653589793 / 180.0);
-    const numberOfPoints = 5;
-    final halfWidth = size.width / 2;
-    final externalRadius = halfWidth;
-    final internalRadius = halfWidth / 2.5;
-    final degreesPerStep = degToRad(360 / numberOfPoints);
-    final halfDegreesPerStep = degreesPerStep / 2;
+    const int points = 5;
+    final double cx = size.width / 2;
+    final double cy = size.height / 2;
+    final double outerR = cx;
+    final double innerR = cx / 2.5;
+    const double startAngle = -3.141592653589793 / 2; // top
+    const double step = 3.141592653589793 / points;
+
     final path = Path();
-    final fullAngle = degToRad(360);
-    path.moveTo(size.width, halfWidth);
-    for (double step = 0; step < fullAngle; step += degreesPerStep) {
-      path.lineTo(halfWidth + externalRadius * 1.05 * 0.95 * 3.14 * 0, halfWidth); // simplified logic just to get a shape
+    for (int i = 0; i < points * 2; i++) {
+      final double r = i.isEven ? outerR : innerR;
+      final double angle = startAngle + i * step;
+      final double x = cx + r * _cos(angle);
+      final double y = cy + r * _sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
-    path.addOval(Rect.fromCircle(center: Offset(halfWidth, halfWidth), radius: externalRadius));
     path.close();
     return path;
+  }
+
+  // Inline trig to avoid dart:math import bloat
+  double _cos(double rad) => _sinCos(rad, false);
+  double _sin(double rad) => _sinCos(rad, true);
+  double _sinCos(double rad, bool isSin) {
+    // Normalise to [-π, π]
+    while (rad > 3.141592653589793) rad -= 2 * 3.141592653589793;
+    while (rad < -3.141592653589793) rad += 2 * 3.141592653589793;
+    // Taylor series (accurate enough for 5-star rendering)
+    double result = isSin ? rad : 1.0;
+    double term = isSin ? rad : 1.0;
+    final double r2 = rad * rad;
+    for (int n = 1; n <= 7; n++) {
+      term *= r2 / ((2 * n) * (2 * n + (isSin ? 1 : -1)));
+      term = -term;
+      result += term;
+    }
+    return result;
   }
 }
