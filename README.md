@@ -1,4 +1,5 @@
 🍯 SavingJar App
+
 SavingJar, kullanıcıların finansal hedeflerine ulaşmalarını sağlayan, minimalist ve modern bir arayüze sahip akıllı bir birikim takip uygulamasıdır. Flutter ve Firebase teknolojileriyle geliştirilen bu uygulama, kullanıcıların "Kumbara" (Jar) mantığıyla para biriktirmesini ve harcamalarını yönetmesini sağlar.
 
 ✨ Özellikler
@@ -51,6 +52,7 @@ Uygulamayı Çalıştırın:
 
 Bash
 flutter run
+
 📁 Dosya Yapısı
 Plaintext
 lib/
@@ -63,6 +65,8 @@ lib/
 │   ├── screens/     # Home, New Jar, Settings ve Detail ekranları
 │   └── widgets/     # Özel butonlar, kartlar ve form bileşenleri
 └── main.dart        # Uygulama giriş noktası
+
+
 📈 Kullanım İpuçları
 Yeni Kumbara Oluşturma: Ana ekrandaki "+" butonuna basın. İsmini girin, rengini ve ikonunu seçin. Siyah ekran hatası almamak için tüm alanların dolu olduğundan emin olun.
 
