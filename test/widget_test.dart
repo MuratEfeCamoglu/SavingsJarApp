@@ -1,30 +1,32 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:savings/main.dart';
+import 'package:savings/core/jar_icons.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const SavingsJarApp());
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('every category image is bundled (declared in pubspec)', () async {
+    for (final key in kJarIcons.keys) {
+      final data = await rootBundle.load(jarImagePath(key));
+      expect(data.lengthInBytes, greaterThan(0), reason: key);
+    }
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('every category renders its image', (tester) async {
+    for (final key in kJarIcons.keys) {
+      await tester.pumpWidget(MaterialApp(
+        home: buildJarIcon(key, imageSize: 100, iconColor: Colors.white),
+      ));
+      expect(find.byType(Image), findsOneWidget, reason: key);
+    }
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('unknown category falls back to the piggy bank icon', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: buildJarIcon('unknown', imageSize: 100, iconColor: Colors.white),
+    ));
+    expect(find.byIcon(Icons.savings_outlined), findsOneWidget);
   });
 }

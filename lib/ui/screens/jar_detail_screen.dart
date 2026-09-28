@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../providers/jar_provider.dart';
 import '../../data/models/jar_model.dart';
 import '../../data/models/transaction_model.dart';
+import '../../core/jar_icons.dart';
+import '../../core/money_rules.dart';
 import '../../core/theme.dart';
-import 'celebration_screen.dart';
+import '../widgets/jar_actions.dart';
 
 class JarDetailScreen extends StatelessWidget {
   final JarModel jar;
@@ -26,7 +28,8 @@ class JarDetailScreen extends StatelessWidget {
         final progress = (liveJar.targetAmount > 0)
             ? (liveJar.savedAmount / liveJar.targetAmount).clamp(0.0, 1.0)
             : 0.0;
-        final isCompleted = liveJar.savedAmount >= liveJar.targetAmount && liveJar.targetAmount > 0;
+        final isCompleted = isGoalReached(liveJar);
+        final withdrawAllowed = canWithdraw(liveJar);
         final jarTransactions = provider.transactionsForJar(jar.id);
 
         return Scaffold(
@@ -39,8 +42,7 @@ class JarDetailScreen extends StatelessWidget {
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'delete') {
-                    provider.deleteJar(jar.id);
-                    Navigator.pop(context);
+                    deleteJarWithConfirmation(context, liveJar, popAfter: true);
                   }
                 },
                 itemBuilder: (_) => [
@@ -73,7 +75,7 @@ class JarDetailScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _buildIcon(liveJar.iconStyle),
+                      buildJarIcon(liveJar.iconStyle, imageSize: 100, iconColor: Colors.white),
                       const SizedBox(height: 16),
                       Text(liveJar.name,
                           style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
@@ -117,7 +119,8 @@ class JarDetailScreen extends StatelessWidget {
                 Row(children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _showTransactionDialog(context, liveJar, isWithdraw: false),
+                      onPressed: () => showMoneyDialog(context, liveJar,
+                          isWithdraw: false, color: _jarColor, replaceRoute: true),
                       icon: const Icon(Icons.add, color: Colors.white),
                       label: const Text('Add Money', style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
@@ -130,9 +133,10 @@ class JarDetailScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _showTransactionDialog(context, liveJar, isWithdraw: true),
-                      icon: const Icon(Icons.remove),
-                      label: const Text('Withdraw'),
+                      onPressed: () => showMoneyDialog(context, liveJar,
+                          isWithdraw: true, color: _jarColor),
+                      icon: Icon(withdrawAllowed ? Icons.remove : Icons.lock_outline),
+                      label: Text(withdrawAllowed ? 'Withdraw' : 'Locked'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.orange,
                         side: const BorderSide(color: Colors.orange),
@@ -182,161 +186,6 @@ class JarDetailScreen extends StatelessWidget {
         );
       },
     );
-  }
-
-  void _showTransactionDialog(BuildContext context, JarModel liveJar, {required bool isWithdraw}) {
-    final amountCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: Theme.of(ctx).cardColor,
-          title: Text(
-            isWithdraw ? 'Withdraw from ${liveJar.name}' : 'Add to ${liveJar.name}',
-            style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-                decoration: InputDecoration(
-                  hintText: 'Amount',
-                  hintStyle: TextStyle(color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  prefixIcon: Icon(Icons.attach_money,
-                      color: isWithdraw ? Colors.orange : _jarColor),
-                  filled: true,
-                  fillColor: Theme.of(ctx).scaffoldBackgroundColor,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteCtrl,
-                style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-                decoration: InputDecoration(
-                  hintText: 'Note (optional)',
-                  hintStyle: TextStyle(color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  prefixIcon: const Icon(Icons.note_outlined),
-                  filled: true,
-                  fillColor: Theme.of(ctx).scaffoldBackgroundColor,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setDialogState(() => selectedDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(ctx).scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.calendar_today_outlined, size: 18,
-                        color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                    const SizedBox(width: 10),
-                    Text(DateFormat('MMM dd, yyyy').format(selectedDate),
-                        style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color)),
-                    const Spacer(),
-                    Icon(Icons.edit_calendar_outlined, size: 16,
-                        color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isWithdraw ? Colors.orange : _jarColor,
-              ),
-              onPressed: () async {
-                final amount =
-                    double.tryParse(amountCtrl.text.replaceAll(',', '.'));
-                if (amount == null || amount <= 0) return;
-                Navigator.pop(ctx);
-
-                final finalAmount = isWithdraw ? -amount : amount;
-                final title = isWithdraw ? 'Withdrawal' : 'Deposit';
-
-                await Provider.of<JarProvider>(context, listen: false).addMoney(
-                  liveJar.id,
-                  finalAmount,
-                  title: title,
-                  note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-                  date: selectedDate,
-                );
-
-                if (!isWithdraw) {
-                  final newProgress = (liveJar.targetAmount > 0)
-                      ? (liveJar.savedAmount + amount) / liveJar.targetAmount
-                      : 0.0;
-                  if (newProgress >= 1.0 && context.mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => CelebrationScreen(jar: liveJar)),
-                    );
-                  }
-                }
-              },
-              child: Text(isWithdraw ? 'Withdraw' : 'Add',
-                  style: const TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIcon(String iconStyle) {
-    const imageStyles = ['car', 'home', 'plane'];
-    if (imageStyles.contains(iconStyle)) {
-      return Image.asset('lib/images/$iconStyle.png', width: 100, height: 100,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _iconFallback(iconStyle));
-    }
-    return _iconFallback(iconStyle);
-  }
-
-  Widget _iconFallback(String iconStyle) {
-    const iconMap = {
-      'piggy': Icons.savings_outlined,
-      'plane': Icons.flight,
-      'home': Icons.home_outlined,
-      'car': Icons.directions_car_outlined,
-      'tech': Icons.computer_outlined,
-      'health': Icons.favorite_outline,
-      'education': Icons.school_outlined,
-      'gift': Icons.card_giftcard_outlined,
-      'emergency': Icons.local_hospital_outlined,
-      'luxury': Icons.diamond_outlined,
-      'shopping': Icons.shopping_bag_outlined,
-      'food': Icons.restaurant_outlined,
-      'sports': Icons.sports_soccer,
-      'music': Icons.music_note_outlined,
-      'pet': Icons.pets_outlined,
-    };
-    return Icon(iconMap[iconStyle] ?? Icons.savings_outlined, size: 80, color: Colors.white);
   }
 }
 

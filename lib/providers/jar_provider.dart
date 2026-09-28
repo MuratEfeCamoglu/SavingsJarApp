@@ -45,11 +45,11 @@ class JarProvider with ChangeNotifier {
 
     _txUnsub?.call();
 
-    // Limit to last 100 to avoid huge list rebuilds
+    // No limit: without a server-side orderBy (which needs a composite index)
+    // a limit would return an arbitrary subset, not the latest transactions.
     final sub = _db
         .collection('transactions')
         .where('userId', isEqualTo: uid)
-        .limit(100)
         .snapshots()
         .listen((snapshot) {
       _transactions = snapshot.docs
@@ -71,8 +71,28 @@ class JarProvider with ChangeNotifier {
     await _db.collection('jars').add(data);
   }
 
+  /// Deletes the jar and all of its transactions.
   Future<void> deleteJar(String jarId) async {
-    await _db.collection('jars').doc(jarId).delete();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final txSnapshot = await _db
+        .collection('transactions')
+        .where('userId', isEqualTo: uid)
+        .where('jarId', isEqualTo: jarId)
+        .get();
+
+    // Jar goes last so a partial failure never leaves orphaned transactions.
+    final refs = [
+      ...txSnapshot.docs.map((d) => d.reference),
+      _db.collection('jars').doc(jarId),
+    ];
+    // Firestore batches are capped at 500 writes
+    for (var i = 0; i < refs.length; i += 500) {
+      final batch = _db.batch();
+      for (final ref in refs.skip(i).take(500)) {
+        batch.delete(ref);
+      }
+      await batch.commit();
+    }
   }
 
   /// [amount] positive = deposit, negative = withdrawal.

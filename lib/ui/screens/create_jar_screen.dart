@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/jar_icons.dart';
 import '../../core/theme.dart';
 import '../../providers/jar_provider.dart';
 import '../../data/models/jar_model.dart';
@@ -183,7 +184,9 @@ class _CreateJarScreenState extends State<CreateJarScreen> {
                         border: Border.all(color: isSelected ? _selectedColor : Colors.transparent, width: 2),
                       ),
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(item['icon'] as IconData, color: isSelected ? _selectedColor : AppTheme.textSecondary, size: 26),
+                        Image.asset(jarImagePath(item['key'] as String), width: 34, height: 34,
+                            errorBuilder: (_, __, ___) => Icon(item['icon'] as IconData,
+                                color: isSelected ? _selectedColor : AppTheme.textSecondary, size: 26)),
                         const SizedBox(height: 4),
                         Text(item['label'] as String,
                             style: TextStyle(fontSize: 9, color: isSelected ? _selectedColor : AppTheme.textSecondary),

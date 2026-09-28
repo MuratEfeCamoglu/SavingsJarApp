@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownsExisting() { return signedIn() && resource.data.userId == request.auth.uid; }
+    function ownsIncoming() { return signedIn() && request.resource.data.userId == request.auth.uid; }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /jars/{jarId} {
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming() && request.resource.data.savedAmount == 0;
+      allow update: if ownsExisting() && ownsIncoming()
+        // Balance may not go negative (small tolerance for float drift)
+        && request.resource.data.savedAmount >= -0.01
+        // Locked jars can't be withdrawn from until the goal is reached
+        && !(resource.data.locked == true
+             && resource.data.savedAmount < resource.data.targetAmount
+             && request.resource.data.savedAmount < resource.data.savedAmount);
+    }
+
+    match /transactions/{txId} {
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming()
+        && get(/databases/$(database)/documents/jars/$(request.resource.data.jarId)).data.userId == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

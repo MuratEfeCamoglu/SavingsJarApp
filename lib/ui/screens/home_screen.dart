@@ -4,37 +4,45 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/models/jar_model.dart';
 import '../../providers/jar_provider.dart';
+import '../../core/jar_icons.dart';
+import '../../core/money_rules.dart';
 import '../../core/theme.dart';
+import '../widgets/jar_actions.dart';
 import 'jar_detail_screen.dart';
-import 'celebration_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final photoURL = user?.photoURL;
-
     return Scaffold(
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: CircleAvatar(
-            backgroundImage: photoURL != null
-                ? NetworkImage(photoURL) as ImageProvider
-                : null,
-            backgroundColor: AppTheme.primary.withOpacity(0.2),
-            child: photoURL == null
-                ? Text(
-                    (user?.displayName?.isNotEmpty == true)
-                        ? user!.displayName![0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary))
-                : null,
+          // userChanges() also fires on display name / photo updates
+          child: StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.userChanges(),
+            initialData: FirebaseAuth.instance.currentUser,
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+              final photoURL = user?.photoURL;
+              return CircleAvatar(
+                backgroundImage: photoURL != null
+                    ? NetworkImage(photoURL) as ImageProvider
+                    : null,
+                backgroundColor: AppTheme.primary.withOpacity(0.2),
+                child: photoURL == null
+                    ? Text(
+                        (user?.displayName?.isNotEmpty == true)
+                            ? user!.displayName![0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary))
+                    : null,
+              );
+            },
           ),
         ),
         title: Text('Savings Jars',
@@ -89,7 +97,8 @@ class _JarCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = (jar.targetAmount > 0) ? (jar.savedAmount / jar.targetAmount).clamp(0.0, 1.0) : 0.0;
-    final isCompleted = jar.savedAmount >= jar.targetAmount && jar.targetAmount > 0;
+    final isCompleted = isGoalReached(jar);
+    final withdrawAllowed = canWithdraw(jar);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final jarColor = jar.color != null ? Color(jar.color!) : AppTheme.primary;
 
@@ -154,7 +163,7 @@ class _JarCard extends StatelessWidget {
                             color: Theme.of(context).textTheme.bodyMedium?.color),
                         onSelected: (value) {
                           if (value == 'delete') {
-                            Provider.of<JarProvider>(context, listen: false).deleteJar(jar.id);
+                            deleteJarWithConfirmation(context, jar);
                           }
                         },
                         itemBuilder: (_) => [
@@ -168,7 +177,9 @@ class _JarCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   // Icon
-                  Center(child: _buildJarIcon(jar.iconStyle)),
+                  Center(
+                      child: buildJarIcon(jar.iconStyle,
+                          imageSize: 140, iconColor: AppTheme.primary)),
                   const SizedBox(height: 16),
                   // Name & amounts
                   Text(jar.name, style: Theme.of(context).textTheme.titleLarge),
@@ -241,7 +252,8 @@ class _JarCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () => _showMoneyDialog(context, jar, isWithdraw: false),
+                            onPressed: () => showMoneyDialog(context, jar,
+                                isWithdraw: false, color: jarColor),
                             icon: const Icon(Icons.add, size: 16, color: Colors.white),
                             label: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(
@@ -255,9 +267,11 @@ class _JarCard extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () => _showMoneyDialog(context, jar, isWithdraw: true),
-                            icon: const Icon(Icons.remove, size: 16),
-                            label: const Text('Withdraw', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: () => showMoneyDialog(context, jar,
+                                isWithdraw: true, color: jarColor),
+                            icon: Icon(withdrawAllowed ? Icons.remove : Icons.lock_outline, size: 16),
+                            label: Text(withdrawAllowed ? 'Withdraw' : 'Locked',
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.orange,
                             side: const BorderSide(color: Colors.orange),
@@ -276,145 +290,4 @@ class _JarCard extends StatelessWidget {
       ),
     );
   }
-
-  void _showMoneyDialog(BuildContext context, JarModel jar, {required bool isWithdraw}) {
-    final amountCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-    final jarColor = jar.color != null ? Color(jar.color!) : AppTheme.primary;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          backgroundColor: Theme.of(ctx).cardColor,
-          title: Text(
-            isWithdraw ? 'Withdraw from ${jar.name}' : 'Add to ${jar.name}',
-            style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-                decoration: InputDecoration(
-                  hintText: 'Amount',
-                  hintStyle: TextStyle(color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  prefixIcon: Icon(isWithdraw ? Icons.remove : Icons.attach_money,
-                      color: isWithdraw ? Colors.orange : jarColor),
-                  filled: true,
-                  fillColor: Theme.of(ctx).scaffoldBackgroundColor,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: noteCtrl,
-                style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color),
-                decoration: InputDecoration(
-                  hintText: 'Note (optional)',
-                  hintStyle: TextStyle(color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  prefixIcon: const Icon(Icons.note_outlined),
-                  filled: true,
-                  fillColor: Theme.of(ctx).scaffoldBackgroundColor,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setS(() => selectedDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(ctx).scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.calendar_today_outlined, size: 16, color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                    const SizedBox(width: 8),
-                    Text('${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                        style: TextStyle(color: Theme.of(ctx).textTheme.bodyLarge?.color)),
-                    const Spacer(),
-                    Icon(Icons.edit_calendar_outlined, size: 14, color: Theme.of(ctx).textTheme.bodyMedium?.color),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: isWithdraw ? Colors.orange : jarColor),
-              onPressed: () async {
-                final amount = double.tryParse(amountCtrl.text.replaceAll(',', '.'));
-                if (amount == null || amount <= 0) return;
-                Navigator.pop(ctx);
-                final provider = Provider.of<JarProvider>(context, listen: false);
-                final finalAmount = isWithdraw ? -amount : amount;
-                await provider.addMoney(jar.id, finalAmount,
-                    title: isWithdraw ? 'Withdrawal' : 'Deposit',
-                    note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-                    date: selectedDate);
-                if (!isWithdraw) {
-                  final newProgress = (jar.targetAmount > 0)
-                      ? (jar.savedAmount + amount) / jar.targetAmount : 0.0;
-                  if (newProgress >= 1.0 && context.mounted) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => CelebrationScreen(jar: jar)));
-                  }
-                }
-              },
-              child: Text(isWithdraw ? 'Withdraw' : 'Add', style: const TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJarIcon(String iconStyle) {
-    const imageStyles = ['car', 'home', 'plane'];
-    if (imageStyles.contains(iconStyle)) {
-      return Image.asset('lib/images/$iconStyle.png', width: 140, height: 140,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _iconFallback(iconStyle));
-    }
-    return _iconFallback(iconStyle);
-  }
-
-  Widget _iconFallback(String iconStyle) {
-    const iconMap = {
-      'piggy': Icons.savings_outlined,
-      'plane': Icons.flight,
-      'home': Icons.home_outlined,
-      'car': Icons.directions_car_outlined,
-      'tech': Icons.computer_outlined,
-      'health': Icons.favorite_outline,
-      'education': Icons.school_outlined,
-      'gift': Icons.card_giftcard_outlined,
-      'emergency': Icons.local_hospital_outlined,
-      'luxury': Icons.diamond_outlined,
-      'shopping': Icons.shopping_bag_outlined,
-      'food': Icons.restaurant_outlined,
-      'sports': Icons.sports_soccer,
-      'music': Icons.music_note_outlined,
-      'pet': Icons.pets_outlined,
-      'wedding': Icons.favorite,
-      'baby': Icons.child_care_outlined,
-      'business': Icons.business_center_outlined,
-    };
-    return Icon(iconMap[iconStyle] ?? Icons.savings_outlined, size: 80, color: AppTheme.primary);
-  }
 }
-

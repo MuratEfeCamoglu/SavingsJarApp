@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../providers/security_provider.dart';
 import '../../providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -16,10 +17,30 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _biometricEnabled = true;
   bool _uploading = false;
+  late Future<Map<String, dynamic>?> _profileFuture;
 
   User? get _user => FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _getProfile();
+  }
+
+  /// Re-fetches the profile only when it actually changed.
+  void _reloadProfile() {
+    if (mounted) setState(() => _profileFuture = _getProfile());
+  }
+
+  Future<void> _toggleBiometric(SecurityProvider security, bool enabled) async {
+    final ok = await security.setBiometricEnabled(enabled);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Could not enable Biometric Lock. Make sure a fingerprint, face or screen lock is set up.')));
+    }
+  }
 
   // --------------------------------------------------
   // Profile helpers
@@ -72,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     .collection('users')
                     .doc(_user!.uid)
                     .set({'displayName': name}, SetOptions(merge: true));
-                if (mounted) setState(() {}); // rebuild to show new name
+                _reloadProfile();
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context)
@@ -98,7 +119,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final ref = FirebaseStorage.instance
           .ref()
           .child('profile_photos/${_user!.uid}.jpg');
-      await ref.putFile(File(image.path));
+      await ref.putFile(
+          File(image.path), SettableMetadata(contentType: 'image/jpeg'));
       final url = await ref.getDownloadURL();
 
       await _user!.updatePhotoURL(url);
@@ -107,7 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .doc(_user!.uid)
           .set({'photoURL': url}, SetOptions(merge: true));
 
-      if (mounted) setState(() {});
+      _reloadProfile();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -125,6 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final security = Provider.of<SecurityProvider>(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -143,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // ── Profile Card ──────────────────────────────────
           FutureBuilder<Map<String, dynamic>?>(
-            future: _getProfile(),
+            future: _profileFuture,
             builder: (context, snap) {
               final profile = snap.data;
               final displayName = profile?['displayName'] ??
@@ -259,9 +282,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(children: [
               _tile(Icons.fingerprint, 'Biometric Lock',
                   trailing: Switch(
-                      value: _biometricEnabled,
+                      value: security.biometricEnabled,
                       activeColor: AppTheme.primary,
-                      onChanged: (v) => setState(() => _biometricEnabled = v))),
+                      onChanged: (v) => _toggleBiometric(security, v))),
               const Divider(height: 1, indent: 64, endIndent: 20),
               _tile(Icons.lock_reset, 'Change Password',
                   trailing: const Icon(Icons.chevron_right,

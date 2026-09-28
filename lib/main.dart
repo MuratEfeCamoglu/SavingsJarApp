@@ -1,10 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/theme.dart';
 import 'providers/jar_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'providers/security_provider.dart';
 import 'providers/theme_provider.dart';
+import 'ui/screens/biometric_gate.dart';
 import 'ui/screens/main_wrapper.dart';
 import 'ui/screens/login_screen.dart';
 import 'firebase_options.dart';
@@ -12,6 +17,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Category illustrations are MIT licensed and must ship with their notice
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString('lib/images/LICENSE-fluentui-emoji.txt');
+    yield LicenseEntryWithLineBreaks(['Fluent Emoji'], text);
+  });
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -25,11 +35,14 @@ void main() async {
     debugPrint('Firebase init error: $e');
   }
 
+  final prefs = await SharedPreferences.getInstance();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => JarProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => SecurityProvider(prefs)),
       ],
       child: const SavingsJarApp(),
     ),
@@ -91,7 +104,7 @@ class _AuthGateState extends State<_AuthGate> {
               provider.fetchTransactions();
             });
           }
-          return const MainWrapper();
+          return const BiometricGate(child: MainWrapper());
         }
 
         // User logged out — reset tracking
